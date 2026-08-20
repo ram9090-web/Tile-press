@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TILEPRESS — Split images &amp; PDFs into printable sheets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+</head>
+<body>
+
+<header class="titleblock">
+  <div class="tb-top">
+    <div class="tb-name">TILE<span class="dot">•</span>PRESS</div>
+    <div class="tb-tag">Large-format tiling for A4 / A3 print sheets</div>
+  </div>
+  <div class="tb-meta">
+    <div class="tb-field"><div class="lbl">Sheet size</div><div class="val" id="mSize">A4</div></div>
+    <div class="tb-field"><div class="lbl">Layout</div><div class="val" id="mGrid">—</div></div>
+    <div class="tb-field"><div class="lbl">Scale</div><div class="val" id="mScale">—</div></div>
+    <div class="tb-field"><div class="lbl">Finished size</div><div class="val" id="mFinished">—</div></div>
+    <div class="tb-field"><div class="lbl">Sheets</div><div class="val" id="mSheets">—</div></div>
+  </div>
+</header>
+
+<main>
+  <!-- LEFT: controls -->
+  <section class="panel">
+    <div class="panel-head"><div class="num">1</div><h2>Source</h2></div>
+    <div class="panel-body">
+      <div class="dropzone" id="dropzone">
+        <div class="dz-title">Drop a JPG, PNG or PDF</div>
+        <div class="dz-sub">or tap to browse — becomes the master artwork</div>
+        <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf">
+      </div>
+      <div id="fileChip"></div>
+      <div class="page-select-row" id="pdfPageRow" style="display:none;">
+        <select id="pdfPageSelect"></select>
+      </div>
+    </div>
+
+    <div class="panel-head"><div class="num">2</div><h2>Sheet setup</h2></div>
+    <div class="panel-body">
+      <div class="field">
+        <label>Paper size</label>
+        <div class="seg" id="sizeSeg">
+          <button data-val="A4" class="active">A4</button>
+          <button data-val="A3">A3</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Orientation</label>
+        <div class="seg" id="orientSeg">
+          <button data-val="portrait" class="active">Portrait</button>
+          <button data-val="landscape">Landscape</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Width, in pages</label>
+        <div class="stepper">
+          <button id="wMinus" type="button">−</button>
+          <input type="number" id="pagesWide" value="2" min="1" max="30">
+          <button id="wPlus" type="button">+</button>
+        </div>
+        <div class="hint">Height is calculated automatically to keep proportions.</div>
+      </div>
+      <div class="field">
+        <label>Overlap margin (for gluing)</label>
+        <select id="overlapMm">
+          <option value="0" selected>None</option>
+          <option value="5">5 mm</option>
+          <option value="10">10 mm</option>
+          <option value="15">15 mm</option>
+          <option value="20">20 mm</option>
+        </select>
+        <div class="hint">Adds a duplicated strip to each edge so adjacent sheets can overlap when assembled.</div>
+      </div>
+      <div class="field">
+        <label>Sheet labels</label>
+        <div class="seg" id="labelSeg">
+          <button data-val="show" class="active">Show</button>
+          <button data-val="hide">Hide</button>
+        </div>
+        <div class="hint">Corner tag (A1, A2, B1…) used to identify each sheet when assembling.</div>
+      </div>
+
+      <button class="cta" id="generateBtn" disabled>Build sheets</button>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+        <div class="progress-label" id="progressLabel">Rendering sheet 0 / 0</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: proof sheet -->
+  <section class="panel">
+    <div class="panel-head"><div class="num">3</div><h2>Proof sheet</h2></div>
+    <div class="proof-wrap">
+      <div class="proof-empty" id="proofEmpty">Upload artwork to see the cut layout</div>
+      <div class="proof-stage" style="display:none;" id="proofStageWrap">
+        <canvas id="proofCanvas"></canvas>
+      </div>
+      <div class="proof-legend" id="proofLegend" style="display:none;">
+        <span><span class="swatch cut"></span> cut / fold line</span>
+        <span><span class="swatch overlap"></span> overlap zone</span>
+      </div>
+    </div>
+    <div class="result-row" id="resultRow" style="display:none;">
+      <span id="resultText"></span>
+      <button class="download-btn" id="downloadBtn">Download PDF</button>
+    </div>
+  </section>
+</main>
+
+<footer>Runs entirely in your browser — files are never uploaded anywhere. PDF sources stay fully vector; images embed at their full original resolution (no downsampling).</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
