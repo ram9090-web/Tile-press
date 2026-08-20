@@ -11,6 +11,7 @@ const state = {
   pagesWide: 2,
   overlapMm: 0,
   showLabels: true,
+  trimLastRow: true,
 
   type: null,           // 'pdf' | 'image'
   sourceName: '',
@@ -45,6 +46,7 @@ const orientSeg = document.getElementById('orientSeg');
 const pagesWideInput = document.getElementById('pagesWide');
 const overlapSelect = document.getElementById('overlapMm');
 const labelSeg = document.getElementById('labelSeg');
+const trimSeg = document.getElementById('trimSeg');
 const generateBtn = document.getElementById('generateBtn');
 const proofEmpty = document.getElementById('proofEmpty');
 const proofStageWrap = document.getElementById('proofStageWrap');
@@ -94,10 +96,17 @@ function computeLayout(){
     ? 1
     : 1 + Math.ceil((scaledHeight - pagePtH) / advH);
 
-  const finishedWmm = scaledWidth / PT_PER_MM;
-  const finishedHmm = (advH * (pagesTall - 1) + pagePtH) / PT_PER_MM;
+  // Height of actual artwork visible on the last row, vs. the full paper
+  // height that row would otherwise print at. When trimLastRow is on, the
+  // last row's sheet is cut down to lastRowContentH so no blank paper prints.
+  const lastRowContentH = Math.min(pagePtH, Math.max(1, scaledHeight - advH * (pagesTall - 1)));
+  const gridPtHFull = advH * (pagesTall - 1) + pagePtH;
+  const gridPtHTrimmed = advH * (pagesTall - 1) + lastRowContentH;
 
-  return { mm, pagePtW, pagePtH, overlapPt, advW, advH, pagesWide, pagesTall, scale, scaledWidth, scaledHeight, finishedWmm, finishedHmm };
+  const finishedWmm = scaledWidth / PT_PER_MM;
+  const finishedHmm = (state.trimLastRow ? gridPtHTrimmed : gridPtHFull) / PT_PER_MM;
+
+  return { mm, pagePtW, pagePtH, overlapPt, advW, advH, pagesWide, pagesTall, scale, scaledWidth, scaledHeight, finishedWmm, finishedHmm, lastRowContentH, gridPtHFull, gridPtHTrimmed };
 }
 
 function rowLabel(r){
@@ -143,7 +152,7 @@ function redrawProof(){
   // grid. It only stretches the low-res previewSource for display — the
   // real export never touches this canvas.
   const gridPtW = layout.advW * (layout.pagesWide - 1) + layout.pagePtW;
-  const gridPtH = layout.advH * (layout.pagesTall - 1) + layout.pagePtH;
+  const gridPtH = state.trimLastRow ? layout.gridPtHTrimmed : layout.gridPtHFull;
   const maxPreviewW = 620;
   const previewScale = Math.min(1, maxPreviewW / gridPtW);
   const cw = Math.max(1, Math.round(gridPtW * previewScale));
@@ -169,20 +178,24 @@ function redrawProof(){
   ctx.save();
   ctx.font = '600 10px "IBM Plex Mono", monospace';
   for (let r = 0; r < layout.pagesTall; r++){
+    const isLastRow = r === layout.pagesTall - 1;
+    const rowPreviewH = (state.trimLastRow && isLastRow)
+      ? layout.lastRowContentH * previewScale
+      : pagePreviewH;
     for (let c = 0; c < layout.pagesWide; c++){
       const x = c * advPreviewW;
       const y = r * advPreviewH;
 
       if (overlapPreview > 0){
         ctx.fillStyle = 'rgba(193,68,14,0.22)';
-        if (c > 0) ctx.fillRect(x, y, overlapPreview, pagePreviewH);
-        if (r > 0) ctx.fillRect(x, y, pagePreviewW, overlapPreview);
+        if (c > 0) ctx.fillRect(x, y, overlapPreview, rowPreviewH);
+        if (r > 0) ctx.fillRect(x, y, pagePreviewW, Math.min(overlapPreview, rowPreviewH));
       }
 
       ctx.strokeStyle = 'rgba(22,35,59,0.75)';
       ctx.setLineDash([4, 3]);
       ctx.lineWidth = 1;
-      ctx.strokeRect(x + 0.5, y + 0.5, pagePreviewW, pagePreviewH);
+      ctx.strokeRect(x + 0.5, y + 0.5, pagePreviewW, rowPreviewH);
 
       ctx.setLineDash([]);
       if (state.showLabels){
@@ -328,6 +341,7 @@ function bindSeg(seg, onPick){
 bindSeg(sizeSeg, (v) => { state.size = v; redrawProof(); });
 bindSeg(orientSeg, (v) => { state.orientation = v; redrawProof(); });
 bindSeg(labelSeg, (v) => { state.showLabels = (v === 'show'); redrawProof(); });
+bindSeg(trimSeg, (v) => { state.trimLastRow = (v === 'trim'); redrawProof(); });
 
 function clampPagesWide(v){
   v = parseInt(v, 10);
@@ -395,13 +409,18 @@ async function generatePdf(){
   let count = 0;
 
   for (let r = 0; r < layout.pagesTall; r++){
+    // Last row's sheet is shortened to just where the artwork ends when
+    // trimLastRow is on, instead of printing a full blank sheet.
+    const isLastRow = r === layout.pagesTall - 1;
+    const pageHeightUsed = (state.trimLastRow && isLastRow) ? layout.lastRowContentH : layout.pagePtH;
+
     for (let c = 0; c < layout.pagesWide; c++){
-      const page = outDoc.addPage([layout.pagePtW, layout.pagePtH]);
+      const page = outDoc.addPage([layout.pagePtW, pageHeightUsed]);
 
       const left = c * layout.advW;
       const top = r * layout.advH;
       const x = -left;
-      const y = layout.pagePtH - layout.scaledHeight + top;
+      const y = pageHeightUsed - layout.scaledHeight + top;
 
       if (state.type === 'pdf'){
         page.drawPage(embeddedPage, { x, y, xScale: layout.scale, yScale: layout.scale });
@@ -410,7 +429,7 @@ async function generatePdf(){
       }
 
       // registration ticks at each corner
-      [[0, layout.pagePtH], [layout.pagePtW, layout.pagePtH], [0, 0], [layout.pagePtW, 0]].forEach(([cx, cy]) => {
+      [[0, pageHeightUsed], [layout.pagePtW, pageHeightUsed], [0, 0], [layout.pagePtW, 0]].forEach(([cx, cy]) => {
         const dx = cx === 0 ? 1 : -1;
         const dy = cy === 0 ? 1 : -1;
         page.drawLine({ start: { x: cx, y: cy }, end: { x: cx + dx * tickLen, y: cy }, thickness: 1, color: ink });
@@ -422,8 +441,8 @@ async function generatePdf(){
         const label = rowLabel(r) + (c + 1);
         const labelSize = 11;
         const labelW = font.widthOfTextAtSize(label, labelSize);
-        page.drawRectangle({ x: 8, y: layout.pagePtH - 30, width: labelW + 14, height: 20, color: paperBg, opacity: 0.9 });
-        page.drawText(label, { x: 14, y: layout.pagePtH - 24, size: labelSize, font, color: ink });
+        page.drawRectangle({ x: 8, y: pageHeightUsed - 30, width: labelW + 14, height: 20, color: paperBg, opacity: 0.9 });
+        page.drawText(label, { x: 14, y: pageHeightUsed - 24, size: labelSize, font, color: ink });
       }
 
       count++;
