@@ -86,6 +86,14 @@
         </div>
         <div class="hint">Corner tag (A1, A2, B1…) used to identify each sheet when assembling.</div>
       </div>
+      <div class="field">
+        <label>Bottom row</label>
+        <div class="seg" id="trimSeg">
+          <button data-val="trim" class="active">Trim to fit</button>
+          <button data-val="full">Full sheet</button>
+        </div>
+        <div class="hint">"Trim to fit" shortens the last row's sheet so it ends where the artwork ends, instead of printing a blank strip of paper.</div>
+      </div>
 
       <button class="cta" id="generateBtn" disabled>Build sheets</button>
       <div class="progress-wrap" id="progressWrap">
